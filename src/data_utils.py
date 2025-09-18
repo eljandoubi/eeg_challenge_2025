@@ -20,7 +20,7 @@ from eegdash.hbn.windows import (
 
 warnings.filterwarnings("ignore")
 
-DATA_DIR = Path("data")
+DATA_DIR = Path("/home/a/startkit/data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 PASSIVE_TASKS = [
@@ -138,20 +138,20 @@ if __name__ == "__main__":
     # data_download()
     # train_inter = set(range(1, 11))
     # train_inter.remove(5)
-    train_inter =  [5]
+    train_inter = [5]
     print(train_inter)
-    dataset = BaseConcatDataset(
-        [
-            EEGChallengeDataset(
-                task="DespicableMe",
-                release=f"R{i}",
-                cache_dir=DATA_DIR,
-                mini=False,
-            )
-            for i in tqdm(train_inter, desc="R")
-        ]
-    )
-    print(dataset.datasets[0].raw.to_data_frame().head())
+    # dataset = BaseConcatDataset(
+    #     [
+    #         EEGChallengeDataset(
+    #             task="DespicableMe",
+    #             release=f"R{i}",
+    #             cache_dir=DATA_DIR,
+    #             mini=False,
+    #         )
+    #         for i in tqdm(train_inter, desc="R")
+    #     ]
+    # )
+    # print(dataset.datasets[0].raw.to_data_frame().head())
 
     # for t in PASSIVE_TASKS+ACTIVE_TASKS:
     #     print("task",t)
@@ -161,7 +161,7 @@ if __name__ == "__main__":
     #             cache_dir=DATA_DIR,
     #             mini=True,
     #         )
-        # print("target", len(eeg.description.columns))
+    # print("target", len(eeg.description.columns))
 
     # for d in dataset.to_dataframe():
     #     print(d)
@@ -172,8 +172,8 @@ if __name__ == "__main__":
     print(meta_information.columns)
     subjects = meta_information["subject"].unique()
     print(subjects)
-    for i,x in enumerate(sw):
+    for i, x in enumerate(sw):
         print(x)
         print(len(x))
-        if i==5:
+        if i == 5:
             break
