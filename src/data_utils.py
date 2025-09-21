@@ -1,7 +1,7 @@
 import warnings
 from pathlib import Path
-from typing import Iterable
-from tqdm import tqdm  # noqa: F401
+from typing import Iterable, Union, List
+from tqdm import tqdm
 
 from joblib import Parallel, delayed
 from eegdash.dataset import EEGChallengeDataset
@@ -9,6 +9,7 @@ from braindecode.preprocessing import (
     preprocess,
     Preprocessor,
     create_windows_from_events,
+    create_fixed_length_windows,
 )
 from braindecode.datasets.base import BaseConcatDataset
 from eegdash.hbn.windows import (
@@ -35,6 +36,7 @@ PASSIVE_TASKS = [
 ACTIVE_TASKS = [
     "symbolSearch",
     "seqLearning8target",
+    "seqLearning6target",
     "contrastChangeDetection",
 ]
 
@@ -50,17 +52,7 @@ WINDOW_LEN = 2.0
 def data_download(data_path: Path = DATA_DIR):
     for i in tqdm(range(1, 12), desc="R"):
         dataset = EEGChallengeDataset(
-            task=[
-                "ThePresent",
-                "FunwithFractals",
-                "DespicableMe",
-                "DiaryOfAWimpyKid",
-                "symbolSearch",
-                "contrastChangeDetection",
-                "surroundSupp",
-                "RestingState",
-                "seqLearning8target",
-            ],
+            task=PASSIVE_TASKS + ACTIVE_TASKS,
             release=f"R{i}",
             cache_dir=data_path,
             mini=False,
@@ -134,46 +126,76 @@ def process_ccd(inter: Iterable[int] = range(1, 12), cache_dir: str = DATA_DIR):
     return single_windows
 
 
+def fixed_windows(
+    tasks: Union[str, List[str]],
+    inter: Iterable[int] = range(1, 12),
+    cache_dir: str = DATA_DIR,
+    wind: int = int(EPOCH_LEN_S * SFREQ),
+):
+    if tasks.lower() == "passive":
+        tasks = PASSIVE_TASKS
+    elif tasks.lower() == "active":
+        tasks = ACTIVE_TASKS
+    elif tasks.lower() == "all":
+        tasks = PASSIVE_TASKS + ACTIVE_TASKS
+
+    if isinstance(tasks, str):
+        assert tasks in PASSIVE_TASKS + ACTIVE_TASKS, (
+            f"tasks must be valid task, got {tasks}"
+        )
+    elif isinstance(tasks, list):
+        assert set(tasks).issubset(PASSIVE_TASKS + ACTIVE_TASKS), (
+            f"tasks must be sub set of valid tasks, got {tasks}"
+        )
+    else:
+        ValueError(f"tasks must be of type str or list, got {type(tasks)}")
+
+    dss = []
+    for i in tqdm(inter, desc="R"):
+        try:
+            dss.append(
+                EEGChallengeDataset(
+                    task=tasks,
+                    release=f"R{i}",
+                    cache_dir=DATA_DIR,
+                    mini=False,
+                )
+            )
+        except Exception as e:
+            print(e)
+
+    concat_ds = BaseConcatDataset(dss)
+
+    concat_ds.datasets = [ds for ds in concat_ds.datasets if ds.raw.n_times >= wind]
+
+    single_windows = create_fixed_length_windows(
+        concat_ds,
+        window_size_samples=wind,
+        window_stride_samples=wind // 2,
+        preload=True,
+        n_jobs=-1,
+        drop_last_window=True,
+        on_missing="warning",
+    )
+
+    return single_windows
+
+
 if __name__ == "__main__":
-    # data_download()
+    data_download()
     # train_inter = set(range(1, 11))
     # train_inter.remove(5)
-    train_inter = [5]
-    print(train_inter)
-    # dataset = BaseConcatDataset(
-    #     [
-    #         EEGChallengeDataset(
-    #             task="DespicableMe",
-    #             release=f"R{i}",
-    #             cache_dir=DATA_DIR,
-    #             mini=False,
-    #         )
-    #         for i in tqdm(train_inter, desc="R")
-    #     ]
-    # )
-    # print(dataset.datasets[0].raw.to_data_frame().head())
+    # train_inter = [5]
+    # print(train_inter)
+    # sw = process_ccd(train_inter)
+    # sw = fixed_windows(tasks="passive",inter=train_inter)
 
-    # for t in PASSIVE_TASKS+ACTIVE_TASKS:
-    #     print("task",t)
-    #     eeg = EEGChallengeDataset(
-    #             task=t,
-    #             release="R5",
-    #             cache_dir=DATA_DIR,
-    #             mini=True,
-    #         )
-    # print("target", len(eeg.description.columns))
-
-    # for d in dataset.to_dataframe():
-    #     print(d)
-    #     break
-    sw = process_ccd(train_inter)
-
-    meta_information = sw.get_metadata()
-    print(meta_information.columns)
-    subjects = meta_information["subject"].unique()
-    print(subjects)
-    for i, x in enumerate(sw):
-        print(x)
-        print(len(x))
-        if i == 5:
-            break
+    # meta_information = sw.get_metadata()
+    # print(meta_information.columns)
+    # subjects = meta_information["subject"].unique()
+    # print(subjects)
+    # for i, x in enumerate(sw):
+    #     print(x)
+    #     print(len(x))
+    #     if i == 5:
+    #         break
