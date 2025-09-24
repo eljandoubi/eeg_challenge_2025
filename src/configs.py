@@ -124,6 +124,7 @@ class TrainingConfig(Basic):
     log_folder: str = "vqvae_eeg"
     max_grad_norm: float = 1.0
     logging_steps: int = 1000
+    resume_from_checkpoint: bool = True
 
 
 @dataclass
