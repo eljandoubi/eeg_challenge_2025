@@ -137,9 +137,7 @@ class VQVAE(nn.Module):
     def forward(self, x: torch.Tensor, hard: bool = True):
         h = self.encoder(x, return_patch_tokens=True)
         v = self.vq(h, hard)
-        print("v", v.shape)
         h_r = self.decoder(v, return_patch_tokens=True)
-        print("h", h_r.shape)
         phi = self.phase(h_r) + h_r
         ampl = self.magnitude(h_r) + h_r
 
@@ -163,12 +161,15 @@ if __name__ == "__main__":
     cfg = VQVAEConfig()
     print(cfg)
     vqvae = VQVAE(**cfg.to_dict()).cuda()
-    x = torch.randn(3, 128, 200).cuda()
+    x = torch.randn(2, 128, 200).cuda()
     y = vqvae(x)
     print(y)
     w = VQVALossesWeights()
     print(w)
     z = w * y
     print(z)
+    z.backward()
+    n = vqvae.vq.codebook.grad.norm()
+    print(n)
     w.update(y)
     print(w)

@@ -1,5 +1,8 @@
+from typing import Optional, Literal
+from pathlib import Path
 from dataclasses import dataclass, asdict
 import torch
+from accelerate.utils import LoggerType
 
 
 @dataclass
@@ -56,7 +59,7 @@ class VQVALossesWeights(Basic):
 class VQVAEConfig(Basic):
     n_times: int = 200
     n_chans: int = 128
-    vocab_size: int = 512
+    vocab_size: int = 1024
     embedding_dim: int = 1024
     temperature: float = 1.0
     qkv_bias: bool = True
@@ -64,3 +67,43 @@ class VQVAEConfig(Basic):
     do_qk_norm: bool = True
     dorp: float = 0.1
     eps: float = 1e-7
+
+
+@dataclass
+class DataConfig(Basic):
+    data_path: Path = "/home/a/startkit/data"
+    tasks: str = "all"
+    train_inter: str = "1"
+    eval_inter: str = "5"
+    num_workers: int = 4
+    download: bool = False
+
+    def __post_init__(self):
+        self.data_path = Path(self.data_path)
+        self.data_path.mkdir(parents=True, exist_ok=True)
+        self.tasks = self.tasks.split(",")
+        if len(self.tasks) == 1:
+            self.tasks = self.tasks[0]
+        self.train_inter = list(map(int, self.train_inter.split(",")))
+        self.eval_inter = list(map(int, self.eval_inter.split(",")))
+
+
+@dataclass
+class TrainingConfig(Basic):
+    train_batch_size: int = 2
+    eval_batch_size: int = 4
+    num_epochs: int = 10
+    seed: Optional[int] = 42
+    lr: float = 1e-5
+    lr_scheduler_type: Literal[
+        "linear",
+        "cosine",
+        "cosine_with_restarts",
+        "polynomial",
+        "constant",
+        "constant_with_warmup",
+    ] = "cosine"
+    num_warmup_steps: Optional[int] = 10000
+    num_training_steps: Optional[int] = None
+    log_with: LoggerType = "tensorboard"
+    project_dir: str = "./work"
