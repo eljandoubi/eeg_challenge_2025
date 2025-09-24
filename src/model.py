@@ -158,9 +158,11 @@ class VQVAE(nn.Module):
 
 
 if __name__ == "__main__":
-    from configs import VQVALossesWeights
+    from configs import VQVALossesWeights, VQVAEConfig
 
-    vqvae = VQVAE(200, 128, 256, 512).cuda()
+    cfg = VQVAEConfig()
+    print(cfg)
+    vqvae = VQVAE(**cfg.to_dict()).cuda()
     x = torch.randn(3, 128, 200).cuda()
     y = vqvae(x)
     print(y)
