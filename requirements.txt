@@ -1,5 +1,4 @@
-eegdash>=0.3.8
-braindecode
-jupyter
+eegdash==0.3.8
+accelerate==1.10.1
+braindecode==1.2.0
 lightning
-ipykernel

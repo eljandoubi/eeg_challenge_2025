@@ -13,6 +13,9 @@ class VectorQuantizerEmbedding(nn.Module):
         embedding_dim: int,
         temperature: float = 1.0,
     ):
+        assert embedding_dim >= vocab_size, (
+            f"We need embedding_dim >= vocab_size but got : {embedding_dim} < {vocab_size}."
+        )
         super().__init__()
         self.n_chans = n_chans
         self.codebook_dim = embedding_dim
@@ -52,15 +55,13 @@ class VQVAE(nn.Module):
         qkv_bias: bool = True,
         init_values: float = 0.1,
         do_qk_norm: bool = True,
+        dorp: float = 0.1,
         eps: float = 1e-7,
     ):
-        super().__init__()
         assert embedding_dim >= n_times, (
             f"We need embedding_dim >= n_times but got : {embedding_dim} < {n_times}."
         )
-        assert embedding_dim >= vocab_size, (
-            f"We need embedding_dim >= vocab_size but got : {embedding_dim} < {vocab_size}."
-        )
+        super().__init__()
         self.eps = eps
         if do_qk_norm:
             qk_norm = nn.LayerNorm
@@ -74,6 +75,9 @@ class VQVAE(nn.Module):
             n_outputs=vocab_size,
             init_values=init_values,
             qk_norm=qk_norm,
+            drop_prob=dorp,
+            drop_path_prob=dorp,
+            attn_drop_prob=dorp,
         )
 
         self.vq = VectorQuantizerEmbedding(
@@ -83,10 +87,14 @@ class VQVAE(nn.Module):
         self.decoder = Labram(
             n_times=embedding_dim,
             n_chans=n_chans,
+            patch_size=embedding_dim,
             qkv_bias=qkv_bias,
-            n_outputs=0,
+            n_outputs=n_times,
             init_values=init_values,
             qk_norm=qk_norm,
+            drop_prob=dorp,
+            drop_path_prob=dorp,
+            attn_drop_prob=dorp,
         )
 
         self.phase = nn.Sequential(
@@ -129,7 +137,9 @@ class VQVAE(nn.Module):
     def forward(self, x: torch.Tensor, hard: bool = True):
         h = self.encoder(x, return_patch_tokens=True)
         v = self.vq(h, hard)
+        print("v", v.shape)
         h_r = self.decoder(v, return_patch_tokens=True)
+        print("h", h_r.shape)
         phi = self.phase(h_r) + h_r
         ampl = self.magnitude(h_r) + h_r
 
@@ -150,7 +160,7 @@ class VQVAE(nn.Module):
 if __name__ == "__main__":
     from configs import VQVALossesWeights
 
-    vqvae = VQVAE(200, 128, 256, 256).cuda()
+    vqvae = VQVAE(200, 128, 256, 512).cuda()
     x = torch.randn(3, 128, 200).cuda()
     y = vqvae(x)
     print(y)
