@@ -1,8 +1,9 @@
+from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from braindecode.models import Labram
-from configs import VQVAETrainingLosses
+from configs import VQVAETrainingLosses, GumbelConfig
 
 
 class VectorQuantizerEmbedding(nn.Module):
@@ -57,11 +58,13 @@ class VQVAE(nn.Module):
         do_qk_norm: bool = True,
         dorp: float = 0.1,
         eps: float = 1e-7,
+        gumbel_cfg: GumbelConfig = GumbelConfig(),
     ):
         assert embedding_dim >= n_times, (
             f"We need embedding_dim >= n_times but got : {embedding_dim} < {n_times}."
         )
         super().__init__()
+        self.gumbel_cfg = gumbel_cfg
         self.eps = eps
         if do_qk_norm:
             qk_norm = nn.LayerNorm
@@ -153,6 +156,17 @@ class VQVAE(nn.Module):
             orthogonality_loss=orth_loss,
             encoder_perplexity=encode_loss,
         )
+
+    def update_gumbel_temperature(self, steps: Optional[int] = None):
+        args = self.gumbel_cfg
+        if steps is None:
+            steps = args.step
+            args.step += 1
+        self.vq.temperature = max(
+            args.max_gumbel_temperature * args.gumbel_temperature_decay**steps,
+            args.min_gumbel_temperature,
+        )
+        return self.vq.temperature
 
 
 if __name__ == "__main__":

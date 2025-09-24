@@ -1,4 +1,4 @@
-from typing import Optional, Literal
+from typing import Optional, Literal, Callable
 from pathlib import Path
 from dataclasses import dataclass, asdict
 import torch
@@ -12,13 +12,27 @@ class VQVAETrainingLosses:
     orthogonality_loss: torch.Tensor
     encoder_perplexity: torch.Tensor
 
-    def to_dict(self):
+    def to_dict(self, prefix: str = "", item: bool = False):
+        if not item:
+            return {
+                f"{prefix}amplitude_loss": self.amplitude_loss.detach(),
+                f"{prefix}phase_loss": self.phase_loss.detach(),
+                f"{prefix}orthogonality_loss": self.orthogonality_loss.detach(),
+                f"{prefix}encoder_perplexity": self.encoder_perplexity.detach(),
+            }
+
         return {
-            "amplitude_loss": self.amplitude_loss.detach(),
-            "phase_loss": self.phase_loss.detach(),
-            "orthogonality_loss": self.orthogonality_loss.detach(),
-            "encoder_perplexity": self.encoder_perplexity.detach(),
+            f"{prefix}amplitude_loss": self.amplitude_loss.item(),
+            f"{prefix}phase_loss": self.phase_loss.item(),
+            f"{prefix}orthogonality_loss": self.orthogonality_loss.item(),
+            f"{prefix}encoder_perplexity": self.encoder_perplexity.item(),
         }
+
+    def map(self, func: Callable[[torch.Tensor], torch.Tensor], prefix: str = ""):
+        res_dict = {}
+        for k, v in self.to_dict(prefix, item=False).items():
+            res_dict[k] = func(v)
+        return VQVAETrainingLosses(**res_dict)
 
 
 @dataclass
@@ -107,3 +121,14 @@ class TrainingConfig(Basic):
     num_training_steps: Optional[int] = None
     log_with: LoggerType = "tensorboard"
     project_dir: str = "./work"
+    log_folder: str = "vqvae_eeg"
+    max_grad_norm: float = 1.0
+    logging_steps: int = 1000
+
+
+@dataclass
+class GumbelConfig(Basic):
+    max_gumbel_temperature: float = 2.0
+    min_gumbel_temperature: float = 0.5
+    gumbel_temperature_decay: float = 0.999995
+    step: Optional[int] = 0

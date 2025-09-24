@@ -66,25 +66,50 @@ accelerator = Accelerator(
     log_with=training_cfg.log_with, project_dir=training_cfg.project_dir
 )
 
-model, optimizer, train_dataloader, *eval_dataloader = accelerator.prepare(
+accelerator.init_trackers(training_cfg.log_folder)
+
+model, optimizer, scheduler, train_dataloader, *eval_dataloader = accelerator.prepare(
     model,
     optimizer,
+    scheduler,
     train_dataloader,  # eval_dataloader
 )
-accelerator.register_for_checkpointing(scheduler)
 
 
+def gather(x: torch.Tensor) -> torch.Tensor:
+    return torch.sum(accelerator.gather_for_metrics(x)) / (
+        training_cfg.train_batch_size * accelerator.state.num_processes
+    )
+
+
+step = 0
 for batch, *_ in tqdm(train_dataloader, desc="Training"):
     x = batch[:, :-1, ...] * 1e5
     optimizer.zero_grad()
     losses = model(x)
-    print(losses)
     loss = loss_weights * losses
     accelerator.backward(loss)
-    print(loss)
+    if accelerator.sync_gradients:
+        grad_norm = accelerator.clip_grad_norm_(
+            model.parameters(), training_cfg.max_grad_norm
+        )
     optimizer.step()
     scheduler.step()
-    loss_weights.update(losses)
+    if hasattr(model, "module"):
+        temperature = model.module.update_gumbel_temperature()
+    else:
+        temperature = model.update_gumbel_temperature()
+
+    if step % training_cfg.logging_steps == 0:
+        gathered_losses = losses.map(gather)
+        loss_weights.update(losses)
+        state = gathered_losses.to_dict(prefix="train_", item=True)
+        state["temperature"] = temperature
+        state["lr"] = scheduler.get_last_lr()[0]
+        state["grad_norm"] = grad_norm.item()
+        print(state)
+    step += 1
     break
 
 print(loss_weights)
+accelerator.end_training()
