@@ -19,7 +19,13 @@ class VQVAETrainingLosses:
 
 
 @dataclass
-class VQVALossesWeights:
+class Basic:
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
+class VQVALossesWeights(Basic):
     w_amplitude_loss: float = 1.0
     w_phase_loss: float = 1.0
     w_orthogonality_loss: float = 1.0
@@ -33,9 +39,6 @@ class VQVALossesWeights:
             + self.w_encoder_perplexity * other.encoder_perplexity
         )
 
-    def to_dict(self):
-        return asdict(self)
-
     @torch.no_grad()
     def update(self, other: VQVAETrainingLosses):
         other_dict = other.to_dict()
@@ -47,3 +50,17 @@ class VQVALossesWeights:
         )
         for k in keys:
             setattr(self, f"w_{k}", weights[keys.index(k)].item())
+
+
+@dataclass
+class VQVAEConfig(Basic):
+    n_times: int = 200
+    n_chans: int = 128
+    vocab_size: int = 512
+    embedding_dim: int = 1024
+    temperature: float = 1.0
+    qkv_bias: bool = True
+    init_values: float = 0.1
+    do_qk_norm: bool = True
+    dorp: float = 0.1
+    eps: float = 1e-7
