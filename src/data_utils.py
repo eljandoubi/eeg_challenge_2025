@@ -21,9 +21,6 @@ from eegdash.hbn.windows import (
 
 warnings.filterwarnings("ignore")
 
-DATA_DIR = Path("/home/a/startkit/data")
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
 PASSIVE_TASKS = [
     "ThePresent",
     "FunwithFractals",
@@ -49,7 +46,7 @@ SHIFT_AFTER_STIM = 0.5
 WINDOW_LEN = 2.0
 
 
-def data_download(data_path: Path = DATA_DIR):
+def data_download(data_path: Path):
     for i in tqdm(range(1, 12), desc="R"):
         dataset = EEGChallengeDataset(
             task=PASSIVE_TASKS + ACTIVE_TASKS,
@@ -63,7 +60,7 @@ def data_download(data_path: Path = DATA_DIR):
         )
 
 
-def process_ccd(inter: Iterable[int] = range(1, 12), cache_dir: str = DATA_DIR):
+def process_ccd(inter: Iterable[int], cache_dir: str):
     dataset_ccd = BaseConcatDataset(
         [
             EEGChallengeDataset(
@@ -128,8 +125,8 @@ def process_ccd(inter: Iterable[int] = range(1, 12), cache_dir: str = DATA_DIR):
 
 def fixed_windows(
     tasks: Union[str, List[str]],
-    inter: Iterable[int] = range(1, 12),
-    cache_dir: str = DATA_DIR,
+    inter: Iterable[int],
+    cache_dir: str,
     wind: int = int(EPOCH_LEN_S * SFREQ),
 ):
     if tasks.lower() == "passive":
@@ -153,20 +150,22 @@ def fixed_windows(
     dss = []
     for i in tqdm(inter, desc="R"):
         try:
-            dss.append(
-                EEGChallengeDataset(
-                    task=tasks,
-                    release=f"R{i}",
-                    cache_dir=DATA_DIR,
-                    mini=False,
-                )
+            ds = EEGChallengeDataset(
+                task=tasks,
+                release=f"R{i}",
+                cache_dir=cache_dir,
+                mini=False,
             )
+            ds.datasets = [
+                d
+                for d in tqdm(ds.datasets, desc="Fitler wind")
+                if d.raw.n_times >= wind
+            ]
+            dss.append(ds)
         except Exception as e:
             print(e)
 
     concat_ds = BaseConcatDataset(dss)
-
-    concat_ds.datasets = [ds for ds in concat_ds.datasets if ds.raw.n_times >= wind]
 
     single_windows = create_fixed_length_windows(
         concat_ds,
