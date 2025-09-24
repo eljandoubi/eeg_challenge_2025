@@ -1,3 +1,5 @@
+import re
+from pathlib import Path
 import torch
 import torch.optim as optim
 from torch.utils.data.dataloader import DataLoader
@@ -23,12 +25,14 @@ optimizer = optim.Adam(model.parameters(), lr=training_cfg.lr)
 if data_cfg.download:
     data_download(training_cfg.data_path)
 
-train_set = fixed_windows(
-    tasks=data_cfg.tasks,
-    inter=data_cfg.train_inter,
-    cache_dir=data_cfg.data_path,
-    wind=vqvae_cfg.n_times,
-)
+# train_set = fixed_windows(
+#     tasks=data_cfg.tasks,
+#     inter=data_cfg.train_inter,
+#     cache_dir=data_cfg.data_path,
+#     wind=vqvae_cfg.n_times,
+# )
+
+train_set = torch.randn(10, 129, 200)
 
 train_dataloader = DataLoader(
     train_set,
@@ -82,32 +86,50 @@ def gather(x: torch.Tensor) -> torch.Tensor:
     )
 
 
+checkpoint_step = -1
+if training_cfg.resume_from_checkpoint:
+    checkpoints = [
+        p
+        for p in Path(accelerator.project_dir).glob("checkpoint_*")
+        if re.fullmatch(r"checkpoint_\d+", p.name)
+    ]
+    path_to_checkpoint = max(checkpoints, key=lambda p: int(p.name.split("_")[-1]))
+    checkpoint_step = int(path_to_checkpoint.name.split("_")[-1])
+    accelerator.print(f"Resuming from Iteration: {checkpoint_step}")
+    with accelerator.main_process_first():
+        accelerator.load_state(path_to_checkpoint)
+
 step = 0
 for batch, *_ in tqdm(train_dataloader, desc="Training"):
-    x = batch[:, :-1, ...] * 1e5
-    optimizer.zero_grad()
-    losses = model(x)
-    loss = loss_weights * losses
-    accelerator.backward(loss)
-    if accelerator.sync_gradients:
-        grad_norm = accelerator.clip_grad_norm_(
-            model.parameters(), training_cfg.max_grad_norm
-        )
-    optimizer.step()
-    scheduler.step()
-    if hasattr(model, "module"):
-        temperature = model.module.update_gumbel_temperature()
-    else:
-        temperature = model.update_gumbel_temperature()
+    if step > checkpoint_step:
+        x = batch[:, :-1, ...] * 1e5
+        optimizer.zero_grad()
+        losses = model(x)
+        loss = loss_weights * losses
+        accelerator.backward(loss)
+        if accelerator.sync_gradients:
+            grad_norm = accelerator.clip_grad_norm_(
+                model.parameters(), training_cfg.max_grad_norm
+            )
+        optimizer.step()
+        scheduler.step()
+        if hasattr(model, "module"):
+            temperature = model.module.update_gumbel_temperature()
+        else:
+            temperature = model.update_gumbel_temperature()
 
-    if step % training_cfg.logging_steps == 0:
-        gathered_losses = losses.map(gather)
-        loss_weights.update(losses)
-        state = gathered_losses.to_dict(prefix="train_", item=True)
-        state["temperature"] = temperature
-        state["lr"] = scheduler.get_last_lr()[0]
-        state["grad_norm"] = grad_norm.item()
-        print(state)
+        if step % training_cfg.logging_steps == 0:
+            gathered_losses = losses.map(gather)
+            loss_weights.update(gathered_losses)
+            state = gathered_losses.to_dict(prefix="train/", item=True)
+            state["temperature"] = temperature
+            state["lr"] = scheduler.get_last_lr()[0]
+            state["grad_norm"] = grad_norm.item()
+            accelerator.log(state, step)
+            path_to_checkpoint = Path(accelerator.project_dir) / f"checkpoint_{step}"
+            accelerator.wait_for_everyone()
+            if accelerator.is_main_process:
+                accelerator.save_state(output_dir=path_to_checkpoint)
     step += 1
     break
 
