@@ -182,19 +182,3 @@ def fixed_windows(
 
 if __name__ == "__main__":
     data_download()
-    # train_inter = set(range(1, 11))
-    # train_inter.remove(5)
-    # train_inter = [5]
-    # print(train_inter)
-    # sw = process_ccd(train_inter)
-    # sw = fixed_windows(tasks="passive",inter=train_inter)
-
-    # meta_information = sw.get_metadata()
-    # print(meta_information.columns)
-    # subjects = meta_information["subject"].unique()
-    # print(subjects)
-    # for i, x in enumerate(sw):
-    #     print(x)
-    #     print(len(x))
-    #     if i == 5:
-    #         break
