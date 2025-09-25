@@ -6,7 +6,7 @@ from torch.utils.data.dataloader import DataLoader
 from accelerate import Accelerator
 from tqdm import tqdm
 from transformers import get_scheduler, set_seed, HfArgumentParser
-from data_utils import data_download  # , fixed_windows
+from data_utils import data_download, fixed_windows
 from model import VQVAE
 import configs as cfg
 
@@ -25,14 +25,13 @@ optimizer = optim.Adam(model.parameters(), lr=training_cfg.lr)
 if data_cfg.download:
     data_download(training_cfg.data_path)
 
-# train_set = fixed_windows(
-#     tasks=data_cfg.tasks,
-#     inter=data_cfg.train_inter,
-#     cache_dir=data_cfg.data_path,
-#     wind=vqvae_cfg.n_times,
-# )
+train_set = fixed_windows(
+    tasks=data_cfg.tasks,
+    inter=data_cfg.train_inter,
+    cache_dir=data_cfg.data_path,
+    wind=vqvae_cfg.n_times,
+)
 
-train_set = torch.randn(10, 129, 200)
 
 train_dataloader = DataLoader(
     train_set,
@@ -42,18 +41,16 @@ train_dataloader = DataLoader(
     pin_memory=True,
 )
 
-# eval_set = fixed_windows(
-#     tasks=data_cfg.tasks,
-#     inter=data_cfg.eval_inter,
-#     cache_dir=data_cfg.data_path,
-#     wind=vqvae_cfg.n_times,
-# )
-
-eval_set = torch.randn(10, 129, 200)
+eval_set = fixed_windows(
+    tasks=data_cfg.tasks,
+    inter=data_cfg.eval_inter,
+    cache_dir=data_cfg.data_path,
+    wind=vqvae_cfg.n_times,
+)
 
 eval_dataloader = DataLoader(
     eval_set,
-    batch_size=training_cfg.train_batch_size,
+    batch_size=training_cfg.eval_batch_size,
     shuffle=False,
     num_workers=data_cfg.num_workers,
     pin_memory=True,
@@ -93,26 +90,29 @@ def gather_eval(x: torch.Tensor) -> torch.Tensor:
     )
 
 
-checkpoint_step = 0
+checkpoint_step = -1
 if training_cfg.resume_from_checkpoint:
     checkpoints = [
         p
         for p in Path(accelerator.project_dir).glob("checkpoint_*")
         if re.fullmatch(r"checkpoint_\d+", p.name)
     ]
-    path_to_checkpoint = max(checkpoints, key=lambda p: int(p.name.split("_")[-1]))
-    checkpoint_step = int(path_to_checkpoint.name.split("_")[-1])
-    accelerator.print(f"Resuming from Iteration: {checkpoint_step}")
-    with accelerator.main_process_first():
-        accelerator.load_state(path_to_checkpoint)
+    if len(checkpoints) > 0:
+        path_to_checkpoint = max(checkpoints, key=lambda p: int(p.name.split("_")[-1]))
+        checkpoint_step = int(path_to_checkpoint.name.split("_")[-1])
+        accelerator.print(f"Resuming from Iteration: {checkpoint_step}")
+        with accelerator.main_process_first():
+            accelerator.load_state(path_to_checkpoint)
 
 step = 0
+model.train()
 progress_bar = tqdm(
-    range(checkpoint_step, training_cfg.num_training_steps),
+    range(max(checkpoint_step, 0), training_cfg.num_training_steps),
     disable=not accelerator.is_local_main_process,
+    desc="Training",
 )
 for _ in range(training_cfg.num_epochs):
-    for batch, *_ in tqdm(train_dataloader, desc="Training"):
+    for batch, *_ in train_dataloader:
         if step > checkpoint_step:
             x = batch[:, :-1, ...] * 1e5
             optimizer.zero_grad()
@@ -137,21 +137,25 @@ for _ in range(training_cfg.num_epochs):
                 state["temperature"] = temperature
                 state["lr"] = scheduler.get_last_lr()[0]
                 state["grad_norm"] = grad_norm.item()
-                state["loss"] = loss.item()
+                state["loss"] = gather_batch(loss.detach()).item()
                 accelerator.log(state, step)
 
             if step % training_cfg.eval_steps == 0:
-                all_losses = cfg.VQVAETrainingLosses().to(accelerator.device)
-                all_loss = torch.tensor(0.0, device=accelerator.device)
+                eval_losses = cfg.VQVAETrainingLosses().to(accelerator.device)
+                eval_loss = torch.tensor(0.0, device=accelerator.device)
                 model.eval()
                 for batch, *_ in tqdm(eval_dataloader, desc="Evaluation"):
                     with torch.inference_mode():
                         x = batch[:, :-1, ...] * 1e5
                         losses = model(x)
-                        all_losses += losses
+                        eval_losses += losses
                         loss = loss_weights * losses
-                        all_loss += loss
+                        eval_loss += loss
 
+                gathered_eval = eval_losses.map(gather_eval, post="detach")
+                eval_state = gathered_eval.to_dict(prefix="eval/", post="item")
+                eval_state["loss"] = gather_eval(eval_loss.detach()).item()
+                accelerator.log(eval_state, step)
                 model.train()
 
                 path_to_checkpoint = (
@@ -163,7 +167,5 @@ for _ in range(training_cfg.num_epochs):
 
             progress_bar.update(1)
         step += 1
-        break
 
-print(loss_weights)
 accelerator.end_training()
