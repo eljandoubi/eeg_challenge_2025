@@ -83,9 +83,9 @@ class VQVALossesWeights(Basic):
             + self.w_encoder_perplexity * other.encoder_perplexity
         )
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def update(self, other: VQVAETrainingLosses):
-        other_dict = other.to_dict()
+        other_dict = other.to_dict(post="detach")
         keys = tuple(other_dict.keys())
         self_dict = self.to_dict()
         weights = torch.tensor([self_dict[f"w_{k}"] for k in keys])
@@ -131,8 +131,8 @@ class DataConfig(Basic):
 
 @dataclass
 class TrainingConfig(Basic):
-    train_batch_size: int = 2
-    eval_batch_size: int = 4
+    train_batch_size: int = 8
+    eval_batch_size: int = 16
     num_epochs: int = 10
     seed: Optional[int] = 42
     lr: float = 1e-5
