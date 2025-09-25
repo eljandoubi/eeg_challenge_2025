@@ -6,15 +6,25 @@ from torch.utils.data.dataloader import DataLoader
 from accelerate import Accelerator
 from tqdm import tqdm
 from transformers import get_scheduler, set_seed, HfArgumentParser
-from data_utils import data_download, fixed_windows
-from model import VQVAE
 import configs as cfg
+from model import VQVAE
+from early_stop import EarlyStopping
+from data_utils import data_download, fixed_windows
+
 
 parser = HfArgumentParser(
-    (cfg.TrainingConfig, cfg.VQVAEConfig, cfg.DataConfig, cfg.VQVALossesWeights)
+    (
+        cfg.TrainingConfig,
+        cfg.VQVAEConfig,
+        cfg.DataConfig,
+        cfg.VQVALossesWeights,
+        cfg.EarlyStoppingConfig,
+    )
 )
 
-(training_cfg, vqvae_cfg, data_cfg, loss_weights) = parser.parse_args_into_dataclasses()
+(training_cfg, vqvae_cfg, data_cfg, loss_weights, stp_cfg) = (
+    parser.parse_args_into_dataclasses()
+)
 
 set_seed(training_cfg.seed)
 
@@ -89,6 +99,8 @@ def gather_eval(x: torch.Tensor) -> torch.Tensor:
         training_cfg.train_batch_size * nb_eval_batch * accelerator.state.num_processes
     )
 
+
+early_stopping = EarlyStopping(**stp_cfg)
 
 checkpoint_step = -1
 if training_cfg.resume_from_checkpoint:
@@ -165,7 +177,13 @@ for _ in range(training_cfg.num_epochs):
                 if accelerator.is_main_process:
                     accelerator.save_state(output_dir=path_to_checkpoint)
 
+                early_stopping.step(eval_state["loss"], model, accelerator)
             progress_bar.update(1)
         step += 1
+        if early_stopping.should_stop:
+            accelerator.print("Early stopping triggered!")
+            break
+    if early_stopping.should_stop:
+        break
 
 accelerator.end_training()

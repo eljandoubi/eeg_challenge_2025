@@ -154,3 +154,10 @@ class GumbelConfig(Basic):
     min_gumbel_temperature: float = 0.5
     gumbel_temperature_decay: float = 0.999995
     step: Optional[int] = 0
+
+
+@dataclass
+class EarlyStoppingConfig(Basic):
+    patience: int = 5
+    min_delta: float = 0.0
+    save_path: str = "best_checkpoint.pt"
