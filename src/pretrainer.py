@@ -6,7 +6,7 @@ from torch.utils.data.dataloader import DataLoader
 from accelerate import Accelerator
 from tqdm import tqdm
 from transformers import get_scheduler, set_seed, HfArgumentParser
-from data_utils import data_download, fixed_windows
+from data_utils import data_download  # , fixed_windows
 from model import VQVAE
 import configs as cfg
 
@@ -49,13 +49,17 @@ train_dataloader = DataLoader(
 #     wind=vqvae_cfg.n_times,
 # )
 
-# eval_dataloader = DataLoader(
-#     eval_set,
-#     batch_size=training_cfg.train_batch_size,
-#     shuffle=False,
-#     num_workers=data_cfg.num_workers,
-#     pin_memory=True,
-# )
+eval_set = torch.randn(10, 129, 200)
+
+eval_dataloader = DataLoader(
+    eval_set,
+    batch_size=training_cfg.train_batch_size,
+    shuffle=False,
+    num_workers=data_cfg.num_workers,
+    pin_memory=True,
+)
+
+nb_eval_batch = len(eval_dataloader)
 
 training_cfg.num_training_steps = len(train_dataloader) * training_cfg.num_epochs
 
@@ -72,21 +76,24 @@ accelerator = Accelerator(
 
 accelerator.init_trackers(training_cfg.log_folder)
 
-model, optimizer, scheduler, train_dataloader, *eval_dataloader = accelerator.prepare(
-    model,
-    optimizer,
-    scheduler,
-    train_dataloader,  # eval_dataloader
+model, optimizer, scheduler, train_dataloader, eval_dataloader = accelerator.prepare(
+    model, optimizer, scheduler, train_dataloader, eval_dataloader
 )
 
 
-def gather(x: torch.Tensor) -> torch.Tensor:
+def gather_batch(x: torch.Tensor) -> torch.Tensor:
     return torch.sum(accelerator.gather_for_metrics(x)) / (
         training_cfg.train_batch_size * accelerator.state.num_processes
     )
 
 
-checkpoint_step = -1
+def gather_eval(x: torch.Tensor) -> torch.Tensor:
+    return torch.sum(accelerator.gather_for_metrics(x)) / (
+        training_cfg.train_batch_size * nb_eval_batch * accelerator.state.num_processes
+    )
+
+
+checkpoint_step = 0
 if training_cfg.resume_from_checkpoint:
     checkpoints = [
         p
@@ -100,38 +107,63 @@ if training_cfg.resume_from_checkpoint:
         accelerator.load_state(path_to_checkpoint)
 
 step = 0
-for batch, *_ in tqdm(train_dataloader, desc="Training"):
-    if step > checkpoint_step:
-        x = batch[:, :-1, ...] * 1e5
-        optimizer.zero_grad()
-        losses = model(x)
-        loss = loss_weights * losses
-        accelerator.backward(loss)
-        if accelerator.sync_gradients:
-            grad_norm = accelerator.clip_grad_norm_(
-                model.parameters(), training_cfg.max_grad_norm
-            )
-        optimizer.step()
-        scheduler.step()
-        if hasattr(model, "module"):
-            temperature = model.module.update_gumbel_temperature()
-        else:
-            temperature = model.update_gumbel_temperature()
+progress_bar = tqdm(
+    range(checkpoint_step, training_cfg.num_training_steps),
+    disable=not accelerator.is_local_main_process,
+)
+for _ in range(training_cfg.num_epochs):
+    for batch, *_ in tqdm(train_dataloader, desc="Training"):
+        if step > checkpoint_step:
+            x = batch[:, :-1, ...] * 1e5
+            optimizer.zero_grad()
+            losses = model(x)
+            loss = loss_weights * losses
+            accelerator.backward(loss)
+            if accelerator.sync_gradients:
+                grad_norm = accelerator.clip_grad_norm_(
+                    model.parameters(), training_cfg.max_grad_norm
+                )
+            optimizer.step()
+            scheduler.step()
+            if hasattr(model, "module"):
+                temperature = model.module.update_gumbel_temperature()
+            else:
+                temperature = model.update_gumbel_temperature()
 
-        if step % training_cfg.logging_steps == 0:
-            gathered_losses = losses.map(gather)
-            loss_weights.update(gathered_losses)
-            state = gathered_losses.to_dict(prefix="train/", item=True)
-            state["temperature"] = temperature
-            state["lr"] = scheduler.get_last_lr()[0]
-            state["grad_norm"] = grad_norm.item()
-            accelerator.log(state, step)
-            path_to_checkpoint = Path(accelerator.project_dir) / f"checkpoint_{step}"
-            accelerator.wait_for_everyone()
-            if accelerator.is_main_process:
-                accelerator.save_state(output_dir=path_to_checkpoint)
-    step += 1
-    break
+            if step % training_cfg.logging_steps == 0:
+                gathered_losses = losses.map(gather_batch, post="detach")
+                loss_weights.update(gathered_losses)
+                state = gathered_losses.to_dict(prefix="train/", post="item")
+                state["temperature"] = temperature
+                state["lr"] = scheduler.get_last_lr()[0]
+                state["grad_norm"] = grad_norm.item()
+                state["loss"] = loss.item()
+                accelerator.log(state, step)
+
+            if step % training_cfg.eval_steps == 0:
+                all_losses = cfg.VQVAETrainingLosses().to(accelerator.device)
+                all_loss = torch.tensor(0.0, device=accelerator.device)
+                model.eval()
+                for batch, *_ in tqdm(eval_dataloader, desc="Evaluation"):
+                    with torch.inference_mode():
+                        x = batch[:, :-1, ...] * 1e5
+                        losses = model(x)
+                        all_losses += losses
+                        loss = loss_weights * losses
+                        all_loss += loss
+
+                model.train()
+
+                path_to_checkpoint = (
+                    Path(accelerator.project_dir) / f"checkpoint_{step}"
+                )
+                accelerator.wait_for_everyone()
+                if accelerator.is_main_process:
+                    accelerator.save_state(output_dir=path_to_checkpoint)
+
+            progress_bar.update(1)
+        step += 1
+        break
 
 print(loss_weights)
 accelerator.end_training()
