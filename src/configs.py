@@ -114,7 +114,7 @@ class VQVAEConfig(Basic):
 class DataConfig(Basic):
     data_path: Path = "/home/a/startkit/data"
     tasks: str = "all"
-    train_inter: str = "1"
+    train_inter: Optional[str] = None
     eval_inter: str = "5"
     num_workers: int = 4
     download: bool = False
@@ -125,7 +125,12 @@ class DataConfig(Basic):
         self.tasks = self.tasks.split(",")
         if len(self.tasks) == 1:
             self.tasks = self.tasks[0]
-        self.train_inter = list(map(int, self.train_inter.split(",")))
+        if isinstance(self.train_inter, str):
+            self.train_inter = list(map(int, self.train_inter.split(",")))
+        else:
+            inter = list(range(1, 12))
+            inter.remove(5)
+            self.train_inter = inter
         self.eval_inter = list(map(int, self.eval_inter.split(",")))
 
 
@@ -133,18 +138,19 @@ class DataConfig(Basic):
 class TrainingConfig(Basic):
     train_batch_size: int = 8
     eval_batch_size: int = 16
-    num_epochs: int = 10
+    num_epochs: int = 10_000
     seed: Optional[int] = 42
-    lr: float = 1e-5
+    lr: float = 1e-4
+    weight_decay: float = 0.01
     lr_scheduler_type: SchedulerType = "cosine"
     num_warmup_steps: Optional[int] = 10000
     num_training_steps: Optional[int] = None
     log_with: LoggerType = "tensorboard"
     project_dir: str = "./work"
     log_folder: str = "vqvae_eeg"
-    max_grad_norm: float = 1.0
-    logging_steps: int = 1000
-    eval_steps: int = 10000
+    max_grad_norm: float = 10.0
+    logging_steps: int = 1_000
+    eval_steps: int = 50_000
     resume_from_checkpoint: bool = True
 
 
