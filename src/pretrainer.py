@@ -100,7 +100,7 @@ def gather_eval(x: torch.Tensor) -> torch.Tensor:
     )
 
 
-early_stopping = EarlyStopping(**stp_cfg)
+early_stopping = EarlyStopping(**stp_cfg.to_dict())
 
 checkpoint_step = -1
 if training_cfg.resume_from_checkpoint:
