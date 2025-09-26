@@ -1,7 +1,9 @@
 from data_utils import fixed_windows, PASSIVE_TASKS, ACTIVE_TASKS
 
 
-r5 = fixed_windows(tasks="contrastChangeDetection", inter=[5])
+r5 = fixed_windows(
+    tasks="contrastChangeDetection", inter=[5], cache_dir="/home/a/startkit/data"
+)
 
 meta_information = r5.get_metadata()
 r5_subjects = meta_information["subject"].unique()
