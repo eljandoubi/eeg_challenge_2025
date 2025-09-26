@@ -181,4 +181,4 @@ def fixed_windows(
 
 
 if __name__ == "__main__":
-    data_download()
+    data_download("/home/a/startkit/data")
