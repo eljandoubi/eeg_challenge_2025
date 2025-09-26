@@ -30,7 +30,9 @@ set_seed(training_cfg.seed)
 
 model = VQVAE(**vqvae_cfg.to_dict())
 
-optimizer = optim.Adam(model.parameters(), lr=training_cfg.lr)
+optimizer = optim.AdamW(
+    model.parameters(), lr=training_cfg.lr, weight_decay=training_cfg.weight_decay
+)
 
 if data_cfg.download:
     data_download(training_cfg.data_path)
@@ -137,14 +139,13 @@ for _ in range(training_cfg.num_epochs):
                 )
             optimizer.step()
             scheduler.step()
-            if hasattr(model, "module"):
-                temperature = model.module.update_gumbel_temperature()
-            else:
-                temperature = model.update_gumbel_temperature()
 
             if step > 0 and step % training_cfg.logging_steps == 0:
+                if hasattr(model, "module"):
+                    temperature = model.module.update_gumbel_temperature()
+                else:
+                    temperature = model.update_gumbel_temperature()
                 gathered_losses = losses.map(gather_batch, post="detach")
-                loss_weights.update(gathered_losses)
                 state = gathered_losses.to_dict(prefix="train/", post="item")
                 state.update(loss_weights.to_dict())
                 state["temperature"] = temperature
@@ -166,6 +167,7 @@ for _ in range(training_cfg.num_epochs):
                         eval_loss += loss
 
                 gathered_eval = eval_losses.map(gather_eval, post="detach")
+                loss_weights.update(gathered_eval)
                 eval_state = gathered_eval.to_dict(prefix="eval/", post="item")
                 eval_state["eval/loss"] = gather_eval(eval_loss.detach()).item()
                 accelerator.log(eval_state, step)

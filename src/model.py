@@ -24,7 +24,7 @@ class VectorQuantizerEmbedding(nn.Module):
         self.temperature = temperature
 
         self.codebook = nn.Parameter(torch.empty(1, n_chans, vocab_size, embedding_dim))
-        nn.init.trunc_normal_(self.codebook)
+        nn.init.trunc_normal_(self.codebook, std=0.02)
 
     def compute_codeloss(self) -> torch.Tensor:
         norm = torch.matmul(self.codebook, self.codebook.transpose(-1, -2))
@@ -66,6 +66,7 @@ class VQVAE(nn.Module):
         super().__init__()
         self.gumbel_cfg = gumbel_cfg
         self.eps = eps
+        self.embedding_dim = embedding_dim
         if do_qk_norm:
             qk_norm = nn.LayerNorm
         else:
@@ -120,6 +121,8 @@ class VQVAE(nn.Module):
             nn.Linear(embedding_dim, n_times),
         )
 
+        self.apply(Labram._init_weights)
+
     @torch.no_grad()
     def _compute_target(self, x: torch.Tensor):
         X = torch.fft.fft(x, dim=-1)
@@ -133,9 +136,11 @@ class VQVAE(nn.Module):
         squashed_phase = torch.atanh(torch.clamp(phase, -1 + self.eps, 1 - self.eps))
         return log_mag, squashed_phase
 
-    @staticmethod
-    def _encoder_perplexity(h: torch.Tensor):
-        return -(h.softmax(dim=-1) * h.log_softmax(dim=-1)).sum()
+    def _encoder_perplexity(self, h: torch.Tensor):
+        return (
+            torch.tensor(self.embedding_dim, device=h.device).log()
+            + (h.softmax(dim=-1) * h.log_softmax(dim=-1)).sum(dim=-1)
+        ).sum()
 
     def forward(self, x: torch.Tensor, hard: bool = True):
         h = self.encoder(x, return_patch_tokens=True)
