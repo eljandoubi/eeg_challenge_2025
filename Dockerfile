@@ -21,7 +21,7 @@ RUN uv pip install --system --no-cache-dir -U pip
 
 RUN uv pip install --system --no-cache-dir -r requirements.txt
 
-RUN chmod -x launch.sh &&\
-    sed -i 's/\r//g' launch.sh
+RUN chmod -x launch_script.sh &&\
+    sed -i 's/\r//g' launch_script.sh
 
-ENTRYPOINT ["/bin/bash", "launch.sh"]
+ENTRYPOINT ["/bin/bash", "launch_script.sh"]
