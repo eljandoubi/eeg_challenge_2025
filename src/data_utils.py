@@ -123,6 +123,13 @@ def process_ccd(inter: Iterable[int], cache_dir: str):
     return single_windows
 
 
+def parallel_filter(func, iterable, n_jobs=-1):
+    # Run predicate in parallel
+    mask = Parallel(n_jobs=n_jobs)(delayed(func)(item) for item in iterable)
+    # Keep items where predicate returned True
+    return [item for item, keep in zip(iterable, mask) if keep]
+
+
 def fixed_windows(
     tasks: Union[str, List[str]],
     inter: Iterable[int],
@@ -156,11 +163,9 @@ def fixed_windows(
                 cache_dir=cache_dir,
                 mini=False,
             )
-            ds.datasets = [
-                d
-                for d in tqdm(ds.datasets, desc="Fitler wind")
-                if d.raw.n_times >= wind
-            ]
+            ds.datasets = parallel_filter(
+                lambda d: d.raw.n_times >= wind, tqdm(ds.datasets, desc="Fitler wind")
+            )
             dss.append(ds)
         except Exception as e:
             print(e)
