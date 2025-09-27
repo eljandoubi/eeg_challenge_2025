@@ -118,11 +118,14 @@ class DataConfig(Basic):
     eval_inter: str = "5"
     num_workers: int = 4
     download: bool = False
+    process: bool = True
 
     def __post_init__(self):
         self.data_path = Path(self.data_path)
         self.data_path.mkdir(parents=True, exist_ok=True)
         self.tasks = self.tasks.split(",")
+        if self.process:
+            self.download = False
         if len(self.tasks) == 1:
             self.tasks = self.tasks[0]
         if isinstance(self.train_inter, str):
@@ -148,10 +151,18 @@ class TrainingConfig(Basic):
     log_with: LoggerType = "tensorboard"
     project_dir: str = "./work"
     log_folder: str = "vqvae_eeg"
+    train_data: str = "./work/train_data"
+    eval_data: str = "./work/eval_data"
     max_grad_norm: float = 10.0
     logging_steps: int = 1_000
     eval_steps: int = 50_000
     resume_from_checkpoint: bool = True
+
+    def __post_init__(self):
+        self.train_data = Path(self.train_data)
+        self.train_data.mkdir(parents=True, exist_ok=True)
+        self.eval_data = Path(self.eval_data)
+        self.eval_data.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass
