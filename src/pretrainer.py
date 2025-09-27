@@ -15,6 +15,10 @@ from model import VQVAE
 from early_stop import EarlyStopping
 from data_utils import data_download, fixed_windows
 
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 
 parser = HfArgumentParser(
     (
@@ -25,6 +29,8 @@ parser = HfArgumentParser(
         cfg.EarlyStoppingConfig,
     )
 )
+
+logging.info("Parse configs")
 
 (training_cfg, vqvae_cfg, data_cfg, loss_weights, stp_cfg) = (
     parser.parse_args_into_dataclasses()
