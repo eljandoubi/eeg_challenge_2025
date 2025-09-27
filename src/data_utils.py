@@ -1,8 +1,9 @@
+import logging
 import warnings
 from pathlib import Path
 from typing import Iterable, Union, List
-from tqdm import tqdm
 
+from tqdm import tqdm
 from joblib import Parallel, delayed
 from eegdash.dataset import EEGChallengeDataset
 from braindecode.preprocessing import (
@@ -171,15 +172,13 @@ def fixed_windows(
             print(e)
 
     concat_ds = BaseConcatDataset(dss)
-
+    logging.info("create fixed length windows")
     single_windows = create_fixed_length_windows(
         concat_ds,
         window_size_samples=wind,
         window_stride_samples=wind // 2,
-        preload=True,
         n_jobs=-1,
         drop_last_window=True,
-        on_missing="warning",
     )
 
     return single_windows
