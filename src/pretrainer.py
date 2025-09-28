@@ -65,7 +65,7 @@ if data_cfg.process:
     eval_set.save(training_cfg.eval_data)
 else:
     logging.info("Load fixed windows training data")
-    train_set = load_concat_dataset(training_cfg.train_data, n_jobs=-1)
+    train_set = load_concat_dataset(training_cfg.train_data, preload=True, n_jobs=-1)
     train_dataloader = DataLoader(
         train_set,
         batch_size=training_cfg.train_batch_size,
@@ -74,7 +74,7 @@ else:
         pin_memory=True,
     )
     logging.info("Load fixed windows eval data")
-    eval_set = load_concat_dataset(training_cfg.eval_data, n_jobs=-1)
+    eval_set = load_concat_dataset(training_cfg.eval_data, preload=True, n_jobs=-1)
     eval_dataloader = DataLoader(
         eval_set,
         batch_size=training_cfg.eval_batch_size,
