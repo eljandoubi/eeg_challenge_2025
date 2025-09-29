@@ -67,7 +67,7 @@ else:
     logging.info("Load fixed windows training data")
     train_set = SubjectsDataset(
         training_cfg.train_data,
-        cache_size=training_cfg.cahe_size,
+        cache_size=training_cfg.cache_size,
     )
     train_dataloader = DataLoader(
         train_set,
@@ -80,7 +80,7 @@ else:
     logging.info("Load fixed windows eval data")
     eval_set = SubjectsDataset(
         training_cfg.eval_data,
-        cache_size=training_cfg.cahe_size,
+        cache_size=training_cfg.cache_size,
     )
     eval_dataloader = DataLoader(
         eval_set,
