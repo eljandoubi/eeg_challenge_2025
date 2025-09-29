@@ -117,6 +117,8 @@ class DataConfig(Basic):
     train_inter: Optional[str] = None
     eval_inter: str = "5"
     num_workers: int = 4
+    prefetch_factor: int = 8
+    cache_size: int = 1_000
     download: bool = False
     process: bool = True
 
