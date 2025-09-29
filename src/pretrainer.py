@@ -7,13 +7,13 @@ from tqdm import tqdm
 import torch.optim as optim
 from accelerate import Accelerator
 from torch.utils.data.dataloader import DataLoader
-from braindecode.datautil import load_concat_dataset
 from transformers import get_scheduler, set_seed, HfArgumentParser
 
 import configs as cfg
 from model import VQVAE
 from early_stop import EarlyStopping
 from data_utils import data_download, fixed_windows
+from torch_dataset import SubjectsDataset
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -65,22 +65,30 @@ if data_cfg.process:
     eval_set.save(training_cfg.eval_data)
 else:
     logging.info("Load fixed windows training data")
-    train_set = load_concat_dataset(training_cfg.train_data, preload=True, n_jobs=-1)
+    train_set = SubjectsDataset(
+        training_cfg.train_data,
+        cache_size=training_cfg.cahe_size,
+    )
     train_dataloader = DataLoader(
         train_set,
         batch_size=training_cfg.train_batch_size,
         shuffle=False,
         num_workers=data_cfg.num_workers,
         pin_memory=True,
+        prefetch_factor=data_cfg.prefetch_factor,
     )
     logging.info("Load fixed windows eval data")
-    eval_set = load_concat_dataset(training_cfg.eval_data, preload=True, n_jobs=-1)
+    eval_set = SubjectsDataset(
+        training_cfg.eval_data,
+        cache_size=training_cfg.cahe_size,
+    )
     eval_dataloader = DataLoader(
         eval_set,
         batch_size=training_cfg.eval_batch_size,
         shuffle=False,
         num_workers=data_cfg.num_workers,
         pin_memory=True,
+        prefetch_factor=data_cfg.prefetch_factor,
     )
 
     nb_eval_batch = len(eval_dataloader)
