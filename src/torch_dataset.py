@@ -10,54 +10,59 @@ from braindecode.datasets.base import BaseConcatDataset
 
 
 class SubjectsDataset(Dataset):
-    def __init__(self, data_path: str, cache_size: int = 1000):
+    def __init__(self, data_path: str, nb_subjects: int, cache_size: int = 1000):
         super().__init__()
         self.data_path = Path(data_path)
         self.cache_size = cache_size
         self.cache: OD[int, BaseConcatDataset] = OrderedDict()
         logging.info("Start initialization")
-        self.subject_and_intervals()
+        self.subject_and_intervals(nb_subjects)
         assert hasattr(self, "_len")
         logging.info("Finish initialization")
 
-    def subject_and_intervals(self):
-        S = 0
+    def subject_and_intervals(self, nb_subjects: int):
         subjects = []
-        lower = []
-        upper = []
-        for p in tqdm(
-            self.data_path.iterdir(),
+        sizes = np.array([])
+        bound = (nb_subjects // self.cache_size) + 1
+        for start in tqdm(
+            range(0, bound),
             "Prepare dataset",
-            sum(1 for _ in tqdm(self.data_path.iterdir(), desc="Count subjects")),
         ):
-            folder = p.name
-            if p.is_dir() and folder.isdigit():
-                subject_id = int(str(folder))
-                subject_data = load_concat_dataset(
-                    self.data_path, preload=True, ids_to_load=[subject_id]
+            subject_ids = list(
+                range(
+                    start * self.cache_size,
+                    min((start + 1) * self.cache_size, nb_subjects),
                 )
-                ln = len(subject_data)
-                subjects.append(subject_id)
-                lower.append(S)
-                upper.append(S + ln)
-                S += ln
-        self._len = S
+            )
+            subject_data = load_concat_dataset(
+                self.data_path, preload=False, ids_to_load=subject_ids
+            )
+            subjects.extend(subject_ids)
+            sub_sizes = np.array(subject_data.cumulative_sizes)
+            sizes = np.concat([sizes, [sub_sizes[0]], sub_sizes[1:] - sub_sizes[:-1]])
+        sizes = sizes.astype(np.int32)
+        self._len = sizes.sum()
         self.subject = np.array(subjects)
-        self.lower = np.array(lower)
-        self.upper = np.array(upper)
+        self.sizes = sizes
 
     def get_ids(self, index: int) -> Tuple[int, int]:
-        location = np.argwhere((self.lower <= index) & (index < self.upper))
-        try:
+        upper = self.sizes.cumsum()
+        lower = np.concat([np.zeros(1, dtype=np.int32), upper[:-1]])
+        location = np.argwhere((lower <= index) & (index < upper))
+        if location.size == 1:
             location = location.item()
-        except Exception:
-            location = -1
+        elif location.size == 0:
+            raise StopIteration
+        else:
+            raise ValueError("location must be unique")
 
         subject_id = self.subject[location].item()
-        local_id = index - self.lower[location]
+        local_id = index - lower[location]
         return subject_id, local_id.item()
 
     def __getitem__(self, index: int):
+        if index < 0:
+            index += len(self)
         subject_id, local_id = self.get_ids(index)
         self.update_cache(subject_id)
         return self.cache[subject_id][local_id]
@@ -65,7 +70,7 @@ class SubjectsDataset(Dataset):
     def update_cache(self, subject_id: int):
         if subject_id not in self.cache:
             self.cache[subject_id] = load_concat_dataset(
-                self.data_path, preload=True, ids_to_load=[subject_id]
+                self.data_path, preload=False, ids_to_load=[subject_id]
             )
         if len(self.cache) > self.cache_size:
             self.cache.popitem(last=False)
