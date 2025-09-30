@@ -28,7 +28,7 @@ class SubjectsDataset(Dataset):
         for p in tqdm(
             self.data_path.iterdir(),
             "Prepare dataset",
-            sum(1 for _ in self.data_path.iterdir()),
+            sum(1 for _ in tqdm(self.data_path.iterdir(), desc="Count subjects")),
         ):
             folder = p.name
             if p.is_dir() and folder.isdigit():
