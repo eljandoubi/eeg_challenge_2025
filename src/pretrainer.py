@@ -66,12 +66,12 @@ if data_cfg.process:
 else:
     logging.info("Load fixed windows training data")
     train_set = SubjectsDataset(
-        training_cfg.train_data,
-        cache_size=training_cfg.cache_size,
+        data_cfg.train_data,
+        cache_size=data_cfg.cache_size,
     )
     train_dataloader = DataLoader(
         train_set,
-        batch_size=training_cfg.train_batch_size,
+        batch_size=data_cfg.train_batch_size,
         shuffle=False,
         num_workers=data_cfg.num_workers,
         pin_memory=True,
@@ -79,8 +79,8 @@ else:
     )
     logging.info("Load fixed windows eval data")
     eval_set = SubjectsDataset(
-        training_cfg.eval_data,
-        cache_size=training_cfg.cache_size,
+        data_cfg.eval_data,
+        cache_size=data_cfg.cache_size,
     )
     eval_dataloader = DataLoader(
         eval_set,
