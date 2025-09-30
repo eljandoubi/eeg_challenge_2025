@@ -121,6 +121,8 @@ class DataConfig(Basic):
     cache_size: int = 1_000
     download: bool = False
     process: bool = True
+    train_data: str = "./work/train_data"
+    eval_data: str = "./work/eval_data"
 
     def __post_init__(self):
         self.data_path = Path(self.data_path)
@@ -137,6 +139,10 @@ class DataConfig(Basic):
             inter.remove(5)
             self.train_inter = inter
         self.eval_inter = list(map(int, self.eval_inter.split(",")))
+        self.train_data = Path(self.train_data)
+        self.train_data.mkdir(parents=True, exist_ok=True)
+        self.eval_data = Path(self.eval_data)
+        self.eval_data.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass
@@ -153,18 +159,10 @@ class TrainingConfig(Basic):
     log_with: LoggerType = "tensorboard"
     project_dir: str = "./work"
     log_folder: str = "vqvae_eeg"
-    train_data: str = "./work/train_data"
-    eval_data: str = "./work/eval_data"
     max_grad_norm: float = 10.0
     logging_steps: int = 1_000
     eval_steps: int = 50_000
     resume_from_checkpoint: bool = True
-
-    def __post_init__(self):
-        self.train_data = Path(self.train_data)
-        self.train_data.mkdir(parents=True, exist_ok=True)
-        self.eval_data = Path(self.eval_data)
-        self.eval_data.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass
