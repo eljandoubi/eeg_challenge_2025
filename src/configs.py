@@ -122,7 +122,9 @@ class DataConfig(Basic):
     download: bool = False
     process: bool = True
     train_data: str = "./work/train_data"
+    nb_train_sub: int = 23344
     eval_data: str = "./work/eval_data"
+    nb_eval_sub: int = 3326
 
     def __post_init__(self):
         self.data_path = Path(self.data_path)
