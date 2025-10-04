@@ -43,7 +43,7 @@ if data_cfg.process:
     logging.info("Process Data")
     if data_cfg.download:
         logging.info("Download Data")
-        data_download(training_cfg.data_path)
+        data_download(data_cfg.data_path)
 
     logging.info("create fixed windows training data")
     train_set = fixed_windows(
@@ -53,7 +53,7 @@ if data_cfg.process:
         wind=vqvae_cfg.n_times,
     )
     logging.info("Save training data")
-    train_set.save(training_cfg.train_data)
+    train_set.save(data_cfg.train_data)
     logging.info("create fixed windows eval data")
     eval_set = fixed_windows(
         tasks=data_cfg.tasks,
