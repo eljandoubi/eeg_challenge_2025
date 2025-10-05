@@ -62,7 +62,7 @@ if data_cfg.process:
         wind=vqvae_cfg.n_times,
     )
     logging.info("Save eval data")
-    eval_set.save(training_cfg.eval_data)
+    eval_set.save(data_cfg.eval_data)
 else:
     logging.info("Load fixed windows training data")
     train_set = SubjectsDataset(
