@@ -32,9 +32,12 @@ parser = HfArgumentParser(
 
 logging.info("Parse configs")
 
-(training_cfg, vqvae_cfg, data_cfg, loss_weights, stp_cfg) = (
-    parser.parse_args_into_dataclasses()
-)
+cfgs = parser.parse_args_into_dataclasses()
+
+for conf in cfgs:
+    logging.info(conf)
+
+(training_cfg, vqvae_cfg, data_cfg, loss_weights, stp_cfg) = cfgs
 
 set_seed(training_cfg.seed)
 
@@ -72,7 +75,7 @@ else:
     )
     train_dataloader = DataLoader(
         train_set,
-        batch_size=data_cfg.train_batch_size,
+        batch_size=training_cfg.train_batch_size,
         shuffle=False,
         num_workers=data_cfg.num_workers,
         pin_memory=True,

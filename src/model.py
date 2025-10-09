@@ -149,7 +149,7 @@ class VQVAE(nn.Module):
         phi = self.phase(h_r) + h_r
         ampl = self.magnitude(h_r) + h_r
 
-        tr_phi, tr_ampl = self._compute_target(x)
+        tr_ampl, tr_phi = self._compute_target(x)
         phi_loss = F.smooth_l1_loss(phi, tr_phi, reduction="sum")
         ampl_loss = F.smooth_l1_loss(ampl, tr_ampl, reduction="sum")
         orth_loss = self.vq.compute_codeloss()
