@@ -57,7 +57,6 @@ class VQVAE(nn.Module):
         init_values: float = 0.1,
         do_qk_norm: bool = True,
         dorp: float = 0.1,
-        eps: float = 1e-7,
         gumbel_cfg: GumbelConfig = GumbelConfig(),
     ):
         assert embedding_dim >= n_times, (
@@ -65,7 +64,6 @@ class VQVAE(nn.Module):
         )
         super().__init__()
         self.gumbel_cfg = gumbel_cfg
-        self.eps = eps
         self.embedding_dim = embedding_dim
         if do_qk_norm:
             qk_norm = nn.LayerNorm
@@ -101,7 +99,21 @@ class VQVAE(nn.Module):
             attn_drop_prob=dorp,
         )
 
-        self.phase = nn.Sequential(
+        self.phase_back = nn.Sequential(
+            nn.Linear(n_times, embedding_dim),
+            nn.ReLU(),
+            nn.Linear(embedding_dim, 4 * embedding_dim),
+            nn.ReLU(),
+            nn.Linear(4 * embedding_dim, embedding_dim),
+            nn.ReLU(),
+            nn.Linear(embedding_dim, n_times),
+        )
+        self.phase_head = nn.Sequential(
+            nn.LayerNorm(n_times),
+            nn.Linear(n_times, n_times),
+        )
+
+        self.magnitude_back = nn.Sequential(
             nn.Linear(n_times, embedding_dim),
             nn.ReLU(),
             nn.Linear(embedding_dim, 4 * embedding_dim),
@@ -111,14 +123,9 @@ class VQVAE(nn.Module):
             nn.Linear(embedding_dim, n_times),
         )
 
-        self.magnitude = nn.Sequential(
-            nn.Linear(n_times, embedding_dim),
-            nn.ReLU(),
-            nn.Linear(embedding_dim, 4 * embedding_dim),
-            nn.ReLU(),
-            nn.Linear(4 * embedding_dim, embedding_dim),
-            nn.ReLU(),
-            nn.Linear(embedding_dim, n_times),
+        self.magnitude_head = nn.Sequential(
+            nn.LayerNorm(n_times),
+            nn.Linear(n_times, n_times),
         )
 
         self.apply(Labram._init_weights)
@@ -126,32 +133,24 @@ class VQVAE(nn.Module):
     @torch.no_grad()
     def _compute_target(self, x: torch.Tensor):
         X = torch.fft.fft(x, dim=-1)
-        re = X.real
-        im = X.imag
-        # log magnitude
-        log_mag = 0.5 * torch.log(re * re + im * im)
-        # normalized phase
-        phase = torch.atan2(im, re) / torch.pi
-        # squashed phase
-        squashed_phase = torch.atanh(torch.clamp(phase, -1 + self.eps, 1 - self.eps))
-        return log_mag, squashed_phase
+        return X.abs(), X.angle() / torch.pi
 
     def _encoder_perplexity(self, h: torch.Tensor):
         return (
             torch.tensor(self.embedding_dim, device=h.device).log()
             + (h.softmax(dim=-1) * h.log_softmax(dim=-1)).sum(dim=-1)
-        ).sum()
+        ).mean()
 
     def forward(self, x: torch.Tensor, hard: bool = True):
         h = self.encoder(x, return_patch_tokens=True)
         v = self.vq(h, hard)
         h_r = self.decoder(v, return_patch_tokens=True)
-        phi = self.phase(h_r) + h_r
-        ampl = self.magnitude(h_r) + h_r
+        phi = self.phase_head(self.phase_back(h_r) + h_r)
+        ampl = self.magnitude_head(self.magnitude_back(h_r) + h_r)
 
         tr_ampl, tr_phi = self._compute_target(x)
-        phi_loss = F.smooth_l1_loss(phi, tr_phi, reduction="sum")
-        ampl_loss = F.smooth_l1_loss(ampl, tr_ampl, reduction="sum")
+        phi_loss = F.huber_loss(phi, tr_phi, reduction="mean")
+        ampl_loss = F.huber_loss(ampl, tr_ampl, reduction="mean")
         orth_loss = self.vq.compute_codeloss()
         encode_loss = self._encoder_perplexity(h)
 

@@ -61,6 +61,9 @@ class VQVAETrainingLosses:
 
         return self.map(_to)
 
+    def detach(self):
+        return self.map(lambda x: x, post="detach")
+
 
 @dataclass
 class Basic:
@@ -70,10 +73,10 @@ class Basic:
 
 @dataclass
 class VQVALossesWeights(Basic):
-    w_amplitude_loss: float = 1.0
-    w_phase_loss: float = 1.0
-    w_orthogonality_loss: float = 1.0
-    w_encoder_perplexity: float = 1.0
+    w_amplitude_loss: float = 1.0 / 4
+    w_phase_loss: float = 1.0 / 4
+    w_orthogonality_loss: float = 1.0 / 4
+    w_encoder_perplexity: float = 1.0 / 4
 
     def __mul__(self, other: VQVAETrainingLosses) -> torch.Tensor:
         return (
@@ -107,7 +110,6 @@ class VQVAEConfig(Basic):
     init_values: float = 0.1
     do_qk_norm: bool = True
     dorp: float = 0.1
-    eps: float = 1e-7
 
 
 @dataclass
@@ -116,8 +118,10 @@ class DataConfig(Basic):
     tasks: str = "all"
     train_inter: Optional[str] = None
     eval_inter: str = "5"
-    num_workers: int = 4
-    prefetch_factor: int = 8
+    num_workers: int = 0
+    prefetch_factor: Optional[int] = None
+    pin_memory: bool = False
+    persistent_workers: bool = False
     cache_size: int = 1_000
     download: bool = False
     process: bool = True
@@ -161,7 +165,7 @@ class TrainingConfig(Basic):
     log_with: LoggerType = "tensorboard"
     project_dir: str = "./work"
     log_folder: str = "vqvae_eeg"
-    max_grad_norm: float = 10.0
+    max_grad_norm: float = 100.0
     logging_steps: int = 1_000
     eval_steps: int = 50_000
     resume_from_checkpoint: bool = True
@@ -171,7 +175,7 @@ class TrainingConfig(Basic):
 class GumbelConfig(Basic):
     max_gumbel_temperature: float = 2.0
     min_gumbel_temperature: float = 0.5
-    gumbel_temperature_decay: float = 0.999995
+    gumbel_temperature_decay: float = 0.995
     step: Optional[int] = 0
 
 
@@ -180,3 +184,8 @@ class EarlyStoppingConfig(Basic):
     patience: int = 5
     min_delta: float = 0.0
     save_path: str = "best_checkpoint.pt"
+
+
+if __name__ == "__main__":
+    cfg = VQVAEConfig()
+    print(cfg)
