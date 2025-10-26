@@ -1,7 +1,8 @@
-import logging
+from gc import collect
 from pathlib import Path
-from typing import Tuple, OrderedDict as OD
 from collections import OrderedDict
+from typing import Tuple, OrderedDict as OD
+
 import numpy as np
 from tqdm import tqdm
 from torch.utils.data import Dataset
@@ -14,16 +15,13 @@ class SubjectsDataset(Dataset):
         super().__init__()
         self.data_path = Path(data_path)
         self.cache_size = cache_size
+        self.nb_subjects = nb_subjects
         self.cache: OD[int, BaseConcatDataset] = OrderedDict()
-        logging.info("Start initialization")
-        self.subject_and_intervals(nb_subjects)
-        assert hasattr(self, "_len")
-        logging.info("Finish initialization")
 
-    def subject_and_intervals(self, nb_subjects: int):
+    def subject_and_intervals(self):
         subjects = []
         sizes = np.array([])
-        bound = (nb_subjects // self.cache_size) + 1
+        bound = (self.nb_subjects // self.cache_size) + 1
         for start in tqdm(
             range(0, bound),
             "Prepare dataset",
@@ -31,7 +29,7 @@ class SubjectsDataset(Dataset):
             subject_ids = list(
                 range(
                     start * self.cache_size,
-                    min((start + 1) * self.cache_size, nb_subjects),
+                    min((start + 1) * self.cache_size, self.nb_subjects),
                 )
             )
             subject_data = load_concat_dataset(
@@ -40,19 +38,17 @@ class SubjectsDataset(Dataset):
             subjects.extend(subject_ids)
             sub_sizes = np.array(subject_data.cumulative_sizes)
             sizes = np.concat([sizes, [sub_sizes[0]], sub_sizes[1:] - sub_sizes[:-1]])
-        sizes = sizes.astype(np.int32)
-        self._len = sizes.sum()
-        self.subject = np.array(subjects)
-        self.sizes = sizes
+
+        return sizes.astype(np.long), np.array(subjects, dtype=np.long)
 
     def get_ids(self, index: int) -> Tuple[int, int]:
         upper = self.sizes.cumsum()
-        lower = np.concat([np.zeros(1, dtype=np.int32), upper[:-1]])
+        lower = np.concat([np.zeros(1, dtype=np.long), upper[:-1]])
         location = np.argwhere((lower <= index) & (index < upper))
         if location.size == 1:
             location = location.item()
         elif location.size == 0:
-            raise StopIteration
+            raise StopIteration("index out of range")
         else:
             raise ValueError("location must be unique")
 
@@ -73,7 +69,14 @@ class SubjectsDataset(Dataset):
                 self.data_path, preload=False, ids_to_load=[subject_id]
             )
         if len(self.cache) > self.cache_size:
-            self.cache.popitem(last=False)
+            _, ds = self.cache.popitem(last=False)
+            del ds
+            collect()
 
     def __len__(self):
         return self._len
+
+    def syn_data(self, sizes: np.ndarray, subjects: np.ndarray):
+        self.subject = subjects
+        self.sizes = sizes
+        self._len = sizes.sum()
