@@ -1,24 +1,24 @@
 import logging
 import warnings
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Union, List
 
-from tqdm import tqdm
-from joblib import Parallel, delayed
-from eegdash.dataset import EEGChallengeDataset
-from braindecode.preprocessing import (
-    preprocess,
-    Preprocessor,
-    create_windows_from_events,
-    create_fixed_length_windows,
-)
 from braindecode.datasets.base import BaseConcatDataset
+from braindecode.preprocessing import (
+    Preprocessor,
+    create_fixed_length_windows,
+    create_windows_from_events,
+    preprocess,
+)
+from eegdash.dataset import EEGChallengeDataset
 from eegdash.hbn.windows import (
-    annotate_trials_with_target,
     add_aux_anchors,
     add_extras_columns,
+    annotate_trials_with_target,
     keep_only_recordings_with,
 )
+from joblib import Parallel, delayed
+from tqdm import tqdm
 
 warnings.filterwarnings("ignore")
 
@@ -128,21 +128,19 @@ def parallel_filter(func, iterable, n_jobs=-1):
     # Run predicate in parallel
     mask = Parallel(n_jobs=n_jobs)(delayed(func)(item) for item in iterable)
     # Keep items where predicate returned True
-    return [item for item, keep in zip(iterable, mask) if keep]
+    return [item for item, keep in zip(iterable, mask, strict=True) if keep]
 
 
-def fixed_windows(
-    tasks: Union[str, List[str]],
-    inter: Iterable[int],
-    cache_dir: str,
-    wind: int = int(EPOCH_LEN_S * SFREQ),
-):
-    if tasks.lower() == "passive":
-        tasks = PASSIVE_TASKS
-    elif tasks.lower() == "active":
-        tasks = ACTIVE_TASKS
-    elif tasks.lower() == "all":
-        tasks = PASSIVE_TASKS + ACTIVE_TASKS
+def resolve_tasks(tasks: str | list[str]) -> str | list[str]:
+    """Expand 'passive'/'active'/'all' shorthands and validate the task spec."""
+    if isinstance(tasks, str):
+        lowered = tasks.lower()
+        if lowered == "passive":
+            tasks = PASSIVE_TASKS
+        elif lowered == "active":
+            tasks = ACTIVE_TASKS
+        elif lowered == "all":
+            tasks = PASSIVE_TASKS + ACTIVE_TASKS
 
     if isinstance(tasks, str):
         assert tasks in PASSIVE_TASKS + ACTIVE_TASKS, (
@@ -153,7 +151,18 @@ def fixed_windows(
             f"tasks must be sub set of valid tasks, got {tasks}"
         )
     else:
-        ValueError(f"tasks must be of type str or list, got {type(tasks)}")
+        raise ValueError(f"tasks must be of type str or list, got {type(tasks)}")
+
+    return tasks
+
+
+def fixed_windows(
+    tasks: str | list[str],
+    inter: Iterable[int],
+    cache_dir: str,
+    wind: int = int(EPOCH_LEN_S * SFREQ),
+):
+    tasks = resolve_tasks(tasks)
 
     dss = []
     for i in tqdm(inter, desc="R"):
@@ -185,4 +194,4 @@ def fixed_windows(
 
 
 if __name__ == "__main__":
-    data_download("/home/a/startkit/data")
+    data_download("./data")
