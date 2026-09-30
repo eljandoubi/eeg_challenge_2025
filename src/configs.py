@@ -1,6 +1,8 @@
-from typing import Optional, Callable, Literal
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from typing import Literal
+
 import torch
 from accelerate.utils import LoggerType
 from transformers import SchedulerType
@@ -109,17 +111,17 @@ class VQVAEConfig(Basic):
     qkv_bias: bool = True
     init_values: float = 0.1
     do_qk_norm: bool = True
-    dorp: float = 0.1
+    drop_rate: float = 0.1
 
 
 @dataclass
 class DataConfig(Basic):
-    data_path: Path = "/home/a/startkit/data"
+    data_path: str = "./data"
     tasks: str = "all"
-    train_inter: Optional[str] = None
+    train_inter: str | None = None
     eval_inter: str = "5"
     num_workers: int = 0
-    prefetch_factor: Optional[int] = None
+    prefetch_factor: int | None = None
     pin_memory: bool = False
     persistent_workers: bool = False
     cache_size: int = 1_000
@@ -156,12 +158,12 @@ class TrainingConfig(Basic):
     train_batch_size: int = 8
     eval_batch_size: int = 16
     num_epochs: int = 10_000
-    seed: Optional[int] = 42
+    seed: int | None = 42
     lr: float = 1e-4
     weight_decay: float = 0.01
     lr_scheduler_type: SchedulerType = "cosine"
-    num_warmup_steps: Optional[int] = 10000
-    num_training_steps: Optional[int] = None
+    num_warmup_steps: int | None = 10000
+    num_training_steps: int | None = None
     log_with: LoggerType = "tensorboard"
     project_dir: str = "./work"
     log_folder: str = "vqvae_eeg"
@@ -176,7 +178,7 @@ class GumbelConfig(Basic):
     max_gumbel_temperature: float = 2.0
     min_gumbel_temperature: float = 0.5
     gumbel_temperature_decay: float = 0.995
-    step: Optional[int] = 0
+    step: int | None = 0
 
 
 @dataclass
