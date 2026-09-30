@@ -1,22 +1,22 @@
-import re
 import logging
-from pathlib import Path
-from itertools import cycle
+import re
 from datetime import timedelta
+from itertools import cycle
+from pathlib import Path
 
 import torch
-from tqdm import tqdm
 import torch.optim as optim
 from accelerate import Accelerator, PartialState
 from accelerate.utils import release_memory
 from accelerate.utils.memory import clear_device_cache
 from torch.utils.data.dataloader import DataLoader
-from transformers import get_scheduler, set_seed, HfArgumentParser
+from tqdm import tqdm
+from transformers import HfArgumentParser, get_scheduler, set_seed
 
 import configs as cfg
-from model import VQVAE
-from early_stop import EarlyStopping
 from data_utils import data_download, fixed_windows
+from early_stop import EarlyStopping
+from model import VQVAE
 from torch_dataset import SubjectsDataset
 
 main_state = PartialState(timeout=timedelta(days=1))

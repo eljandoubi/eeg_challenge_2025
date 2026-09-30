@@ -1,6 +1,6 @@
 import logging
 from os import getenv
-from typing import Dict
+
 import yaml
 
 # Configure logging
@@ -19,8 +19,8 @@ def prepare_config() -> None:
         logging.error("There is no CONFIG_FILE")
         return
     logging.info(f"Load CONFIG_FILE from {base_config}")
-    with open(base_config, "r", encoding="utf-8") as file:
-        accelerate_config: Dict = yaml.safe_load(file)
+    with open(base_config, encoding="utf-8") as file:
+        accelerate_config: dict = yaml.safe_load(file)
 
     rank = getenv("RANK")
     if rank is None:
