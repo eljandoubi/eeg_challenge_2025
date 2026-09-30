@@ -1,13 +1,13 @@
+from collections import OrderedDict
+from collections import OrderedDict as OD
 from gc import collect
 from pathlib import Path
-from collections import OrderedDict
-from typing import Tuple, OrderedDict as OD
 
 import numpy as np
-from tqdm import tqdm
-from torch.utils.data import Dataset
-from braindecode.datautil import load_concat_dataset
 from braindecode.datasets.base import BaseConcatDataset
+from braindecode.datautil import load_concat_dataset
+from torch.utils.data import Dataset
+from tqdm import tqdm
 
 
 class SubjectsDataset(Dataset):
@@ -21,7 +21,7 @@ class SubjectsDataset(Dataset):
     def subject_and_intervals(self):
         subjects = []
         sizes = np.array([])
-        bound = (self.nb_subjects // self.cache_size) + 1
+        bound = (self.nb_subjects + self.cache_size - 1) // self.cache_size
         for start in tqdm(
             range(0, bound),
             "Prepare dataset",
@@ -37,23 +37,25 @@ class SubjectsDataset(Dataset):
             )
             subjects.extend(subject_ids)
             sub_sizes = np.array(subject_data.cumulative_sizes)
-            sizes = np.concat([sizes, [sub_sizes[0]], sub_sizes[1:] - sub_sizes[:-1]])
+            sizes = np.concatenate(
+                [sizes, [sub_sizes[0]], sub_sizes[1:] - sub_sizes[:-1]]
+            )
 
-        return sizes.astype(np.long), np.array(subjects, dtype=np.long)
+        return sizes.astype(np.int64), np.array(subjects, dtype=np.int64)
 
-    def get_ids(self, index: int) -> Tuple[int, int]:
-        upper = self.sizes.cumsum()
-        lower = np.concat([np.zeros(1, dtype=np.long), upper[:-1]])
-        location = np.argwhere((lower <= index) & (index < upper))
+    def get_ids(self, index: int) -> tuple[int, int]:
+        location = np.argwhere((self._lower <= index) & (index < self._upper))
         if location.size == 1:
             location = location.item()
         elif location.size == 0:
-            raise StopIteration("index out of range")
+            raise IndexError(
+                f"index {index} out of range for dataset of size {len(self)}"
+            )
         else:
             raise ValueError("location must be unique")
 
         subject_id = self.subject[location].item()
-        local_id = index - lower[location]
+        local_id = index - self._lower[location]
         return subject_id, local_id.item()
 
     def __getitem__(self, index: int):
@@ -64,7 +66,9 @@ class SubjectsDataset(Dataset):
         return self.cache[subject_id][local_id]
 
     def update_cache(self, subject_id: int):
-        if subject_id not in self.cache:
+        if subject_id in self.cache:
+            self.cache.move_to_end(subject_id)
+        else:
             self.cache[subject_id] = load_concat_dataset(
                 self.data_path, preload=False, ids_to_load=[subject_id]
             )
@@ -80,3 +84,6 @@ class SubjectsDataset(Dataset):
         self.subject = subjects
         self.sizes = sizes
         self._len = sizes.sum()
+        # Precompute index bounds once instead of on every __getitem__ call.
+        self._upper = sizes.cumsum()
+        self._lower = np.concatenate([np.zeros(1, dtype=np.int64), self._upper[:-1]])
