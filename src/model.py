@@ -1,9 +1,9 @@
-from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from braindecode.models import Labram
-from configs import VQVAETrainingLosses, GumbelConfig
+
+from configs import GumbelConfig, VQVAETrainingLosses
 
 
 class VectorQuantizerEmbedding(nn.Module):
@@ -15,7 +15,8 @@ class VectorQuantizerEmbedding(nn.Module):
         temperature: float = 1.0,
     ):
         assert embedding_dim >= vocab_size, (
-            f"We need embedding_dim >= vocab_size but got : {embedding_dim} < {vocab_size}."
+            f"We need embedding_dim >= vocab_size but got : "
+            f"{embedding_dim} < {vocab_size}."
         )
         super().__init__()
         self.n_chans = n_chans
@@ -56,14 +57,15 @@ class VQVAE(nn.Module):
         qkv_bias: bool = True,
         init_values: float = 0.1,
         do_qk_norm: bool = True,
-        dorp: float = 0.1,
-        gumbel_cfg: GumbelConfig = GumbelConfig(),
+        drop_rate: float = 0.1,
+        gumbel_cfg: GumbelConfig | None = None,
     ):
         assert embedding_dim >= n_times, (
             f"We need embedding_dim >= n_times but got : {embedding_dim} < {n_times}."
         )
         super().__init__()
-        self.gumbel_cfg = gumbel_cfg
+        # Avoid a mutable default argument shared across instances.
+        self.gumbel_cfg = gumbel_cfg if gumbel_cfg is not None else GumbelConfig()
         self.embedding_dim = embedding_dim
         if do_qk_norm:
             qk_norm = nn.LayerNorm
@@ -77,9 +79,9 @@ class VQVAE(nn.Module):
             n_outputs=vocab_size,
             init_values=init_values,
             qk_norm=qk_norm,
-            drop_prob=dorp,
-            drop_path_prob=dorp,
-            attn_drop_prob=dorp,
+            drop_prob=drop_rate,
+            drop_path_prob=drop_rate,
+            attn_drop_prob=drop_rate,
         )
 
         self.vq = VectorQuantizerEmbedding(
@@ -94,9 +96,9 @@ class VQVAE(nn.Module):
             n_outputs=n_times,
             init_values=init_values,
             qk_norm=qk_norm,
-            drop_prob=dorp,
-            drop_path_prob=dorp,
-            attn_drop_prob=dorp,
+            drop_prob=drop_rate,
+            drop_path_prob=drop_rate,
+            attn_drop_prob=drop_rate,
         )
 
         self.phase_back = nn.Sequential(
@@ -161,7 +163,7 @@ class VQVAE(nn.Module):
             encoder_perplexity=encode_loss,
         )
 
-    def update_gumbel_temperature(self, steps: Optional[int] = None):
+    def update_gumbel_temperature(self, steps: int | None = None):
         args = self.gumbel_cfg
         if steps is None:
             steps = args.step
@@ -174,7 +176,7 @@ class VQVAE(nn.Module):
 
 
 if __name__ == "__main__":
-    from configs import VQVALossesWeights, VQVAEConfig
+    from configs import VQVAEConfig, VQVALossesWeights
 
     cfg = VQVAEConfig()
     print(cfg)
