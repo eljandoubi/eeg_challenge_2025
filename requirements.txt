@@ -1,5 +1,5 @@
 eegdash==0.4.1
-accelerate==1.11.0
-transformers==4.57.1
+accelerate==1.15.0
+transformers==5.23.0
 braindecode==1.2.0
 tensorboard==2.20.0
