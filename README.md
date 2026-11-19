@@ -1,6 +1,6 @@
-# EEG Challenge — VQ-VAE Pretraining
+# EEG Challenge: VQ-VAE Pretraining
 
-[![CI](https://github.com/eljandoubi/eeg_challenge/actions/workflows/ci.yml/badge.svg)](https://github.com/eljandoubi/eeg_challenge/actions/workflows/ci.yml)
+[![CI](https://github.com/eljandoubi/eeg_challenge_2025/actions/workflows/ci.yml/badge.svg)](https://github.com/eljandoubi/eeg_challenge_2025/actions/workflows/ci.yml)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue)](https://www.python.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
@@ -8,7 +8,7 @@ A self-supervised **VQ-VAE pretraining pipeline for EEG signals**, built for the
 [EEG Foundation Challenge](https://eeg2025.github.io/) on the HBN-EEG dataset. The
 model uses [braindecode](https://braindecode.org/)'s `Labram` transformer as an
 encoder/decoder backbone around a Gumbel-softmax vector quantizer, and trains at
-scale with 🤗 [Accelerate](https://huggingface.co/docs/accelerate).
+scale with Hugging Face [Accelerate](https://huggingface.co/docs/accelerate).
 
 ## Overview
 
@@ -53,7 +53,7 @@ scale with 🤗 [Accelerate](https://huggingface.co/docs/accelerate).
 * A **CUDA GPU** to actually pretrain the model at a useful scale (the provided
   `Dockerfile` is the supported way to do this).
 * **No GPU is required** to install the project, run the linter, or run the
-  unit test suite — everything under `tests/` runs on CPU.
+  unit test suite: everything under `tests/` runs on CPU.
 
 ## Installation
 
@@ -74,8 +74,8 @@ pinned separately in `requirements.txt`.
 All configuration is expressed as dataclasses in `src/configs.py`
 (`TrainingConfig`, `VQVAEConfig`, `DataConfig`, `VQVALossesWeights`,
 `EarlyStoppingConfig`) and parsed from the command line with
-🤗 Transformers' `HfArgumentParser`, so every field is available as a
-`--field_name` (or `--field-name`) flag — run `python src/pretrainer.py --help`
+Hugging Face Transformers' `HfArgumentParser`, so every field is available as a
+`--field_name` (or `--field-name`) flag; run `python src/pretrainer.py --help`
 for the full list.
 
 ### 1. Build the windowed datasets (`--process`, on by default)
@@ -98,7 +98,7 @@ included.
 ### 2. Train (`--no_process`)
 
 Once the windowed datasets are cached, launch training (skipping the
-processing step) with 🤗 Accelerate:
+processing step) with Hugging Face Accelerate:
 
 ```bash
 accelerate launch src/pretrainer.py \
@@ -154,17 +154,17 @@ What's covered: config parsing/validation, the VQ-VAE forward/backward pass
 patching logic, task-name validation, and the subject/window indexing math in
 `SubjectsDataset` (including its LRU cache). The full multi-GPU training loop
 in `pretrainer.py` and the real dataset download path are intentionally left
-untested here — they require a GPU and network/data access, which this suite
+untested here because they require a GPU and network/data access, which this suite
 explicitly avoids.
 
 ## Continuous Integration
 
 `.github/workflows/ci.yml` runs on every push/PR:
 
-* **lint** — `ruff check` and `ruff format --check`, executed via `uvx` in an
+* **lint**: `ruff check` and `ruff format --check`, executed via `uvx` in an
   isolated environment (no need to install the heavy ML dependencies just to
   lint).
-* **test** — `uv sync --locked` followed by `uv run pytest`, on CPU.
+* **test**: `uv sync --locked` followed by `uv run pytest`, on CPU.
 
 ## Development
 
@@ -176,4 +176,4 @@ explicitly avoids.
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE).
+Apache License 2.0, see [LICENSE](LICENSE).
